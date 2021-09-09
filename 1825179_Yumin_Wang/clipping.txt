@@ -1,0 +1,251 @@
+// Task Topic: Clipping
+// Student Name: Yumin Wang
+// Student ID: 1825179
+// Programme of study: Informaiton and computing science
+// General explanation here if necessary
+/*
+
+// Main body of code with necessary comments
+This program applies the Cohan-Sutherland two-dimensional line clipping algorithm.
+The part of this rectangle outside the window0000 will be clipped.The clipped part will be dotted. 
+Finally, I can move around the two end points with keys '1234' and '6789'.
+
+
+
+
+#define FREEGLUT_STATIC
+#include <GL/freeglut.h>
+#include"windows.h"
+#define MAX_CHAR 128
+#define LEFT 1
+#define RIGHT 2
+#define BOTTOM 4
+#define TOP 8
+
+
+typedef struct { GLfloat x, y; } point;// Create the point object with x, y coordinates
+
+
+point P1 = { 120,150 }, P2 = { 700,850 };// Initialize position of two points
+
+GLfloat winX = 900, winY = 900;// Initialize the size of the clipping window
+
+GLfloat win_left = winX / 3, win_right = winX / 3 * 2, win_top = winY / 3 * 2, win_bottom = winY / 3;// Initialize the clipping window
+
+// Display characters for the outcodes
+void drawString(const char* str) {
+    static int isFirstCall = 1;
+    static GLuint lists;
+    if (isFirstCall) {
+        isFirstCall = 0;
+        lists = glGenLists(MAX_CHAR);
+        wglUseFontBitmaps(wglGetCurrentDC(), 0, MAX_CHAR, lists);
+    }
+    for (; *str != '\0'; ++str) 
+    {
+        glCallList(lists + *str);
+    }
+}
+
+// Select a font face and size
+void selectFont(int size, int charset, const char* face) {
+    HFONT hFont = CreateFontA(size, 0, 0, 0, FW_MEDIUM, 0, 0, 0, charset, OUT_DEFAULT_PRECIS,
+        CLIP_DEFAULT_PRECIS, DEFAULT_QUALITY, DEFAULT_PITCH | FF_SWISS, face);
+    HFONT hOldFont = (HFONT)SelectObject(wglGetCurrentDC(), hFont);
+    DeleteObject(hOldFont);
+}
+
+// Draw a solid straight line
+void PlotLine(GLfloat x1, GLfloat y1, GLfloat x2, GLfloat y2) {
+    glDisable(GL_LINE_STIPPLE);
+    glBegin(GL_LINES);
+    glVertex2f(x1, y1);
+    glVertex2f(x2, y2);
+    glEnd();
+    
+}
+
+// Draw a dash line
+void PlotStippleLine(GLfloat x1, GLfloat y1, GLfloat x2, GLfloat y2) {
+    glEnable(GL_LINE_STIPPLE);
+    glLineStipple(1, 0x0F0F);
+    glBegin(GL_LINES);
+    glVertex2f(x1, y1);
+    glVertex2f(x2, y2);
+    glEnd();
+    
+}
+
+
+// Create an outcode for each endpoint
+int outcode(point p) {
+    int code = 0;
+    if (p.x < win_left) code = LEFT;
+    else if (p.x > win_right) code = RIGHT;
+    if (p.y < win_bottom) code += BOTTOM;
+    else if (p.y > win_top) code += TOP;
+    return code;
+}
+
+// Draw the inside line segment
+void CohenSutherlandPoint(point point1, point point2) {
+    point p;
+    // Calculate the outcode for each endpoint
+    int code1, code2, code_out_p;
+    code1 = outcode(point1);
+    code2 = outcode(point2);
+
+    // Loop until all the final accepted line segment is found
+    while ((code1 | code2) != 0) {
+        //Trivially rejected
+        if ((code1 & code2) != 0) return;
+        // Find which endpoint is outside of the clipping window
+        if (code1 == 0) {
+            code_out_p = code2;
+        }
+        else {
+            code_out_p = code1;
+        }
+        // The line segment intersects with the left edge
+        if ((code_out_p & LEFT) != 0) {
+            p.x = win_left;
+            p.y = (point1.y - point2.y) / (point1.x - point2.x) * (win_left - point1.x) + point1.y;
+        }
+        // The line segment intersects with the right edge
+        else if ((code_out_p & RIGHT) != 0) {
+            p.x = win_right;
+            p.y = (point1.y - point2.y) / (point1.x - point2.x) * (win_right - point1.x) + point1.y;
+        }
+        // The line segment intersects with the bottom edge
+        else if ((code_out_p & BOTTOM) != 0) {
+            p.y = win_bottom;
+            p.x = (point1.x - point2.x) / (point1.y - point2.y) * (win_bottom - point1.y) + point1.x;
+        }
+        // The line segment intersects with the top edge
+        else if ((code_out_p & TOP) != 0) {
+            p.y = win_top;
+            p.x = (point1.x - point2.x) / (point1.y - point2.y) * (win_top - point1.y) + point1.x;
+        }
+
+        // If point P1 is outside the clipping window
+        if (code_out_p == code1) {
+            // The intersection point is the new endpoint
+            point1.x = p.x;
+            point1.y = p.y;
+            // Re-execute algorithm
+            code1 = outcode(point1);
+        }
+        // If point P2 is outside the clipping window
+        else {
+            // The intersection point is the new endpoint
+            point2.x = p.x;
+            point2.y = p.y;
+            // Re-execute algorithm
+            code2 = outcode(point2);
+        }
+    }
+    // Draw the inside line segment
+    glColor3f(0.2, 0.6, 0.3);
+    PlotLine(point1.x, point1.y, point2.x, point2.y);
+}
+// Draw outcode regions, outcode values and a line segment to be clipped
+void renderScene(void) {
+    // Set the background color
+    glClearColor(0.9, 0.77, 0.8, 0);
+    glClear(GL_COLOR_BUFFER_BIT);
+    // Set the string's color
+    glColor3f(1, 1, 1);
+    selectFont(80, ANSI_CHARSET, "Comic Sans MS");
+
+    //draw outcodes
+    glRasterPos2f(win_left / 2 - 30, win_top / 2 + winY / 2);
+    drawString("1001");
+    glRasterPos2f(win_left / 2 - 30, win_top / 2 + win_bottom / 2);
+    drawString("0001");
+    glRasterPos2f(win_left / 2 - 30, win_bottom / 2);
+    drawString("0101");
+    glRasterPos2f(win_right / 2 - 30 + win_left / 2, win_top / 2 + winY / 2);
+    drawString("1000");
+    glRasterPos2f(win_right / 2 - 30 + win_left / 2, win_top / 2 + win_bottom / 2);
+    drawString("0000");
+    glRasterPos2f(win_right / 2 - 30 + win_left / 2, win_bottom / 2);
+    drawString("0100");
+    glRasterPos2f(win_right / 2 - 30 + winX / 2, win_top / 2 + winY / 2);
+    drawString("1010");
+    glRasterPos2f(win_right / 2 - 30 + winX / 2, win_top / 2 + win_bottom / 2);
+    drawString("0010");
+    glRasterPos2f(win_right / 2 - 30 + winX / 2, win_bottom / 2);
+    drawString("0110");
+
+    // draw the grid
+    glColor3f(1, 1, 1);
+    glLineWidth(1);
+    PlotLine(win_left, 0, win_left, winY);
+    PlotLine(0, win_top, winX, win_top);
+    PlotLine(win_right, 0, win_right, winY);
+    PlotLine(0, win_bottom, winX, win_bottom);
+
+    // Draw the dash lines
+    glColor3f(0, 0, 0);
+    PlotStippleLine(P1.x, P1.y, P2.x, P2.y);
+
+    // Draw the inside line segments (if exist)
+    CohenSutherlandPoint(P1, P2);
+   
+
+    glutSwapBuffers();
+}
+//Keyboard interactions
+void myKeyBoard(unsigned char key, int x, int y) {
+    switch (key) {
+    case '1':
+        P1.y += 10;
+        break;
+    case '2':
+        P1.y -= 10;
+        break;
+    case '3':
+        P1.x -= 10;
+        break;
+    case '4':
+        P1.x += 10;
+        break;
+        //Move the point 2 up/down/left/right
+    case '6':
+        P2.y += 10;
+        break;
+    case '7':
+        P2.y -= 10;
+        break;
+    case '8':
+        P2.x -= 10;
+        break;
+    case '9':
+        P2.x += 10;
+        break;
+    }
+    glutPostRedisplay();
+}
+
+
+// Initialisation
+void myinit(void) {
+    glMatrixMode(GL_PROJECTION);
+    glLoadIdentity();
+    gluOrtho2D(0, winX, 0, winY);
+}
+
+int main(int argc, char* argv[]) {
+    glutInit(&argc, (char**)argv);
+    glutInitDisplayMode(GLUT_DOUBLE | GLUT_RGB);
+    glutInitWindowPosition(50, 0);
+    glutInitWindowSize(winX, winY);
+    glutCreateWindow("Cohen-Sutherland");
+    myinit();
+    glutKeyboardFunc(myKeyBoard);
+    glutDisplayFunc(renderScene);
+    glutMainLoop();
+    return 0;
+}
+
+
